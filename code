@@ -1,10 +1,10 @@
+import datetime
+import time
 import tkinter as tk
 import pygetwindow as gw
-import time as t
 import pickle
 import os
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from plyer import notification
 colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF',
               '#FFA500', '#800080', '#A52A2A', '#FFC0CB', '#808000', '#008000',
@@ -17,103 +17,143 @@ colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF',
               '#FFD700', '#EEE8AA', '#F5DEB3']
 #⚠️
 is_empty = os.stat('time_data.txt').st_size == 0
+current_date = datetime.date.today()
+selected_date = current_date
+
+
+
 if is_empty:
-    apps = {}
+    apps = {str(current_date):{}}
 else:
     with open('time_data.txt', 'rb') as f:
         apps = pickle.load(f)
 
+    if str(current_date) not in apps:
+        apps[str(current_date)] = {}
+
 update_value = 10
 sum_sec = 0
-for s in apps.values():
-    sum_sec += s
+if current_date in apps:
+    for s in apps[current_date].values():
+        sum_sec += s
+else:
+    sum_sec = 0
 limit = float('inf')
 
-def show_warning(title, message):
+def show_warning(title, message, timeout):
     notification.notify(
         title=title,
         message=message,
         toast=True,
-        timeout=5
+        timeout=timeout
     )
 statistic_opened = False
 statistic_window = None
+def update_date_label():
+    data_label.config(text=selected_date.strftime("%Y-%m-%d"))
+def date_today():
+    global selected_date
+    selected_date = current_date
+    update_date_label()
+def date_forward():
+    global selected_date  # Объявляем, что используем глобальную переменную
+
+    selected_date += datetime.timedelta(days=1)
+    update_date_label()
+def date_back():
+    global selected_date  # Объявляем, что используем глобальную переменную
+
+    selected_date -= datetime.timedelta(days=1)
+    update_date_label()
+print(apps)
 def on_close(event):
-    print("Окно закрыто")
     global statistic_opened
     statistic_opened = False
-    print(statistic_opened)
-def show_statistic():
+def save_data():
+    with open('time_data.txt', 'wb') as f:
+        global apps
+        pickle.dump(apps, f)
 
+def show_statistic():
     global statistic_opened, fig, ax, legend_obj
 
-    if not statistic_opened:
-        statistic_opened = True
+    if str(selected_date) in apps:
+        selected_dict = apps[str(selected_date)]
+        sum_values = sum(selected_dict.values())
+        statistic_data = {}
+        for key in selected_dict.keys():
+            if selected_dict[key] / sum_values >= 0.03:
+                statistic_data[key] = selected_dict[key]
 
-        # Создаем фигуру и оси только при первом вызове
-        fig, ax = plt.subplots(figsize=(8, 6))
-        fig.subplots_adjust(left=0.2)  # Освобождаем место для легенды
+        if not statistic_opened:
+            statistic_opened = True
+            # Создаем фигуру и оси только при первом вызове
+            fig, ax = plt.subplots(figsize=(8, 6))
+            fig.subplots_adjust(left=0.2)  # Освобождаем место для легенды
 
-        # Настройка круговой диаграммы
-        wedges, texts, autotexts = ax.pie(
-            apps.values(),
-            pctdistance=0.9,
-            autopct='%1.1f',
-            startangle=90,
-            radius=0.5,
-            counterclock=False,
-            colors=colors,
-            center=(-0.4, 0.5)  # Смещаем центр влево
-        )
+            # Настройка круговой диаграммы
+            wedges, texts, autotexts = ax.pie(
+                statistic_data.values(),
+                pctdistance=1.2,
+                autopct='%1.1f%%',
+                startangle=90,
+                radius=0.5,
+                counterclock=False,
+                colors=colors,
+                center=(-0.4, 0.5)  # Смещаем центр влево
+            )
 
-        # Сохраняем объект легенды для последующего обновления
-        legend_obj = ax.legend(
-            wedges,
-            apps.keys(),
-            loc="center left",
-            bbox_to_anchor=(0.8, 0.5)
-        )
+            # Сохраняем объект легенды для последующего обновления
+            legend_obj = ax.legend(
+                wedges,
+                statistic_data.keys(),
+                loc="center left",
+                bbox_to_anchor=(0.8, 0.5)
+            )
 
-        # Настраиваем оси для касания левого края
-        ax.set_aspect('equal')
-        ax.set_xlim(-0.5, 0.5)
-        ax.set_ylim(0, 1)
-        plt.show(block=False)  # Не блокируем выполнение кода
-        fig.canvas.mpl_connect('close_event', on_close)
+            # Настраиваем оси для касания левого края
+            ax.set_aspect('equal')
+            ax.set_xlim(-0.5, 0.5)
+            ax.set_ylim(0, 1.1)
+            ax.text(0, 1.1, selected_date,family = 'fantasy', ha='center', va='top', fontsize = 14)
+            plt.show(block=False)  # Не блокируем выполнение кода
+            fig.canvas.mpl_connect('close_event', on_close)
+        else:
+            # Обновляем данные на существующей фигуре
+            ax.clear()
+
+            # Перерисовываем диаграмму с новыми данными
+            wedges, texts, autotexts = ax.pie(
+                statistic_data.values(),
+                pctdistance=1.2,
+                autopct='%1.1f%%',
+                startangle=90,
+                radius=0.5,
+                counterclock=False,
+                colors=colors,
+                center=(-0.4, 0.5)  # Смещаем центр влево
+            )
+
+            # Обновляем легенду
+            if legend_obj:
+                legend_obj.remove()  # Удаляем старую легенду
+                legend_obj = ax.legend(
+                wedges,
+                statistic_data.keys(),
+                loc="center left",
+                bbox_to_anchor=(0.8, 0.5)
+            )
+
+            # Восстанавливаем настройки осей
+            ax.set_aspect('equal')
+            ax.set_xlim(-0.5, 0.5)
+            ax.set_ylim(0, 1.1)
+            ax.text(0, 1.1, selected_date, family='fantasy', ha='center', va='top', fontsize=14)
+            fig.canvas.draw_idle()
+            # Принудительное обновление графика
+            fig.canvas.mpl_connect('close_event', on_close)
     else:
-        # Обновляем данные на существующей фигуре
-        ax.clear()
-
-        # Перерисовываем диаграмму с новыми данными
-        wedges, texts, autotexts = ax.pie(
-            apps.values(),
-            pctdistance=0.9,
-            autopct='%1.1f',
-            startangle=90,
-            radius=0.5,
-            counterclock=False,
-            colors=colors,
-            center=(-0.4, 0.5)  # Смещаем центр влево
-        )
-
-        # Обновляем легенду
-        if legend_obj:
-            legend_obj.remove()  # Удаляем старую легенду
-        legend_obj = ax.legend(
-            wedges,
-            apps.keys(),
-            loc="center left",
-            bbox_to_anchor=(0.8, 0.5)
-        )
-
-        # Восстанавливаем настройки осей
-        ax.set_aspect('equal')
-        ax.set_xlim(-0.5, 0.5)
-        ax.set_ylim(0, 1)
-        fig.canvas.draw_idle()
-        # Принудительное обновление графика
-        fig.canvas.mpl_connect('close_event', on_close)
-    print('открыть статистику', statistic_opened)
+        show_warning('⚠️Ошибка⚠️', 'Нет данных', 1)
 class Check_win:
     def __init__(self, root, info_label):
 
@@ -123,95 +163,89 @@ class Check_win:
         self.track_active_window(info_label)  # Запускаем отслеживание
         self.data = str(limit - sum_sec)
         self.info_label = info_label
-
-
+        self.track_time()
+    def track_time(self):
+        global current_date
+        current_date = datetime.date.today()
+        self.root.after(self.update_interval, self.track_time)
+        print(current_date)
     def track_active_window(self, info_label):
         global sum_sec
         if sum_sec >= limit:
-            print(sum_sec, limit)
-            show_warning('⚠️ПРЕДУПРЕЖДЕНИЕ⚠️', 'Вы превысили лимит времени за ПК!')
-        #print(sum_sec)
+            show_warning('⚠️ПРЕДУПРЕЖДЕНИЕ⚠️', 'Вы превысили лимит времени за ПК!', 5)
+
         try:
+
             active_window = gw.getActiveWindow()  # Получаем активное окно
             if active_window:
                 title = active_window.title
             else:
                 title = "None"
-            if title in apps:
-                apps[title] += 1
+            if title in apps[str(current_date)]:
+                apps[str(current_date)][title] += 1
                 sum_sec += 1
+
             else:
-                apps[title] = 0
+                apps[str(current_date)][title] = 0
             sec_left = limit - sum_sec
             info_hrs = sec_left // 3600
             info_min = (sec_left - info_hrs * 3600) // 60
-
-            info = str(info_hrs) + ':' + str(info_min)
+            save_data()
+            info = str(info_hrs) + ':' + str(info_min).zfill(2)
             info_label.config(text = str(info))
-            with open('time_data.txt', 'wb') as f:
-                pickle.dump(apps, f)
-
 
         except Exception as e:
             print(f"Error: {str(e)}")
-
-
-
         # Планируем следующее обновление
         self.root.after(self.update_interval, self.track_active_window, info_label)
-limit_hours = 0
-limit_minuts = 30
+
 def Show_limit(limit_time):
     global limit_minuts, limit_hours
     limit_hours = int(limit_time) // 60
     limit_minuts = int(limit_time) % 60
-    if limit_minuts == 0:
-        text_scale.config(text=str(limit_hours) + ':' + str(limit_minuts) + '0')
-    elif limit_minuts == 5:
-        text_scale.config(text=str(limit_hours) + ':' + '0' + str(limit_minuts))
-    else:
-        text_scale.config(text=str(limit_hours) + ':' + str(limit_minuts))
-def show_time():
-    while True:
-
-        info = limit - sum_sec
-        print(info)
-        info_label = tk.Label(text=str(info), font=("Arial", 22))
-        info_label.config()
-        t.sleep(1)
-
+    text_scale.config(text=str(limit_hours) + ':' + str(limit_minuts).zfill(2))
 def on_acceptbutton_pressed():
     global limit
-
     limit = limit_hours * 60 * 60 + limit_minuts * 60
     text_scale.destroy()
     accept_button.destroy()
     limit_time.destroy()
     info = limit - sum_sec
-    print(info)
-    info_label = tk.Label(text=str(info), font=("Arial", 26))
-    info_label.pack()
-
+    info_label = tk.Label(text=str(info), font=("Small Fonts", 26))
+    info_label.grid(row = 0, column = 0, columnspan = 3, pady = 10)
     app = Check_win(root, info_label)
-    # show_time()
 
+
+limit_hours = 0
+limit_minuts = 30
 
 if __name__ == "__main__":
     root = tk.Tk()
     root.geometry('500x500')
 
-    limit_time = tk.Scale(root, from_ = 30, to = 360,width = 20, troughcolor='#696969'
+    limit_time = tk.Scale(root, from_ = 30, to = 360, width = 20, troughcolor='#696969'
                           ,showvalue = False,highlightthickness=0,sliderrelief='flat',
-                          bg='#D2B48C',activebackground='#C0C0C0',  sliderlength = 20, orient=tk.HORIZONTAL,
+                          bg='#D2B48C',activebackground='#C0C0C0',  sliderlength = 50, orient=tk.HORIZONTAL,
                           resolution=5, borderwidth=0, command = Show_limit)
+    text_scale = tk.Label(text=str(limit_hours) + ':' + str(limit_minuts),  font=("Small Fonts", 26, 'bold'))
+    data_label = tk.Label(text = str(selected_date), font = ("Small Fonts", 24))
+    accept_button = tk.Button(root, text = 'Подтвердить', command = on_acceptbutton_pressed, font = ("Avignon Pro", 13))
+    show_statistic_button = tk.Button(root, text = 'Показать статистику', command = show_statistic, font = ("Small Fonts", 13))
+    forward_button = tk.Button(root, text = '>', command = date_forward, font = ("Small Fonts", 13, 'bold'))
+    back_button = tk.Button(root, text = '<', command = date_back, font = ("Small Fonts", 13, 'bold'))
+    today_button = tk.Button(root, text = 'сегодня', command = date_today, font = ("Small Fonts", 12))
 
-    text_scale = tk.Label(text=str(limit_hours) + ':' + str(limit_minuts),  font=("Arial", 22))
-    text_scale.pack(pady = 10)
-    limit_time.pack(padx = 20, fill = 'x', pady = 0)
-    accept_button = tk.Button(root, text = 'Подтвердить', command = on_acceptbutton_pressed)
-    accept_button.pack(pady = 10)
-    show_statistic_button = tk.Button(root, text = 'Показать статистику', command = show_statistic)
-    show_statistic_button.pack()
+    root.columnconfigure(0, weight=1)
+    root.columnconfigure(1, weight=0)  # Центральная колонка без растяжения
+    root.columnconfigure(2, weight=1)
 
+    text_scale.grid(row=0, column=0, columnspan=3, pady=3)
+    limit_time.grid(row=1, column=0, columnspan=3, sticky="ew", padx=10, pady=5)
+    accept_button.grid(row = 2, column=0, columnspan=3, pady=3)
+    data_label.grid(row=3, column=0, columnspan=3, pady=3)
+    today_button.grid(row=4, column=0, columnspan=3, pady=3)
+    back_button.grid(row=5, column=0, padx=5, pady=10, sticky="e")
+    show_statistic_button.grid(row=5, column=1, padx=5, pady=10)
+    forward_button.grid(row=5, column=2, padx=5, pady=10, sticky="w")
     root.mainloop()
 
