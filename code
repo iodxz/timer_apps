@@ -5,23 +5,27 @@ import pygetwindow as gw
 import pickle
 import os
 import matplotlib.pyplot as plt
+import pystray
 from plyer import notification
+import customtkinter
+from PIL import Image
 colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF',
-              '#FFA500', '#800080', '#A52A2A', '#FFC0CB', '#808000', '#008000',
-              '#008080', '#4682B4', '#D2691E', '#CD5C5C', '#E9967A', '#F08080',
-              '#FA8072', '#DA70D6', '#C71585', '#DB7093', '#FF69B4', '#FF1493',
-              '#9400D3', '#8A2BE2', '#4B0082', '#483D8B', '#6A5ACD', '#7B68EE',
-              '#8FBC8F', '#90EE90', '#3CB371', '#2E8B57', '#ADFF2F', '#7FFF00',
-              '#7CFC00', '#B0E2FF', '#87CEFA', '#87CEEB', '#1E90FF', '#6495ED',
-              '#4169E1', '#00BFFF', '#5F9EA0', '#ADD8E6', '#B0C4DE', '#F0F8FF',
-              '#FFD700', '#EEE8AA', '#F5DEB3']
+          '#FFA500', '#800080', '#A52A2A', '#FFC0CB', '#808000', '#008000',
+          '#008080', '#4682B4', '#D2691E', '#CD5C5C', '#E9967A', '#F08080',
+          '#FA8072', '#DA70D6', '#C71585', '#DB7093', '#FF69B4', '#FF1493',
+          '#9400D3', '#8A2BE2', '#4B0082', '#483D8B', '#6A5ACD', '#7B68EE',
+          '#8FBC8F', '#90EE90', '#3CB371', '#2E8B57', '#ADFF2F', '#7FFF00',
+          '#7CFC00', '#B0E2FF', '#87CEFA', '#87CEEB', '#1E90FF', '#6495ED',
+          '#4169E1', '#00BFFF', '#5F9EA0', '#ADD8E6', '#B0C4DE', '#F0F8FF',
+          '#FFD700', '#EEE8AA', '#F5DEB3']
 #⚠️
 is_empty = os.stat('time_data.txt').st_size == 0
 current_date = datetime.date.today()
 selected_date = current_date
-
-
-
+background_color = '#19080f'
+color_text = '#F1E0C2'
+button_bg_col = '#fee6df'
+button_text_col = '#4C1E0B'
 if is_empty:
     apps = {str(current_date):{}}
 else:
@@ -33,22 +37,52 @@ else:
 
 update_value = 10
 sum_sec = 0
-if current_date in apps:
-    for s in apps[current_date].values():
-        sum_sec += s
+icon = Image.open('icon.png')
+if str(current_date) in apps:
+    sum_sec = sum(apps[str(current_date)].values())
 else:
     sum_sec = 0
 limit = float('inf')
-
+is_warning_showed = False
 def show_warning(title, message, timeout):
-    notification.notify(
-        title=title,
-        message=message,
-        toast=True,
-        timeout=timeout
-    )
+    global is_warning_showed
+    if message == 'Нет данных':
+        notification.notify(
+            title=title,
+            message=message,
+            toast=True,
+            timeout=timeout
+        )
+    elif is_warning_showed == False:
+        notification.notify(
+            title=title,
+            message=message,
+            toast=True,
+            timeout=timeout
+        )
+        is_warning_showed = True
 statistic_opened = False
 statistic_window = None
+tray_icon = None
+def exit_app():
+    global tray_icon
+    print(tray_icon)
+    tray_icon.stop()
+    root.destroy()
+    os._exit(0)
+def show_window():
+    global root
+    if root:
+        root.deiconify()
+        if tray_icon:
+            tray_icon.stop()
+def close_window():
+    global tray_icon
+    if root:
+        root.withdraw()
+        menu = pystray.Menu(pystray.MenuItem("Выход", exit_app),pystray.MenuItem(text="Показать", action=show_window, default=True))
+        tray_icon = pystray.Icon('name', icon, 'timer_apps', menu = menu, on_click=show_window)
+        tray_icon.run()
 def update_date_label():
     data_label.config(text=selected_date.strftime("%Y-%m-%d"))
 def date_today():
@@ -65,7 +99,6 @@ def date_back():
 
     selected_date -= datetime.timedelta(days=1)
     update_date_label()
-print(apps)
 def on_close(event):
     global statistic_opened
     statistic_opened = False
@@ -84,7 +117,13 @@ def show_statistic():
         for key in selected_dict.keys():
             if selected_dict[key] / sum_values >= 0.03:
                 statistic_data[key] = selected_dict[key]
-
+        legend_title = []
+        statistic_data = dict(sorted(statistic_data.items(), key=lambda item: item[1], reverse=True))
+        for leg in statistic_data.keys():
+            hr = str((statistic_data[leg]) // 3600)
+            min = str((statistic_data[leg]) // 60).zfill(2)
+            sec = str(statistic_data[leg] - int(min) * 60).zfill(2)
+            legend_title.append(str(hr + ':' + min + ':' + sec + ' ' + leg))
         if not statistic_opened:
             statistic_opened = True
             # Создаем фигуру и оси только при первом вызове
@@ -94,7 +133,7 @@ def show_statistic():
             # Настройка круговой диаграммы
             wedges, texts, autotexts = ax.pie(
                 statistic_data.values(),
-                pctdistance=1.2,
+                pctdistance=1.1,
                 autopct='%1.1f%%',
                 startangle=90,
                 radius=0.5,
@@ -106,7 +145,7 @@ def show_statistic():
             # Сохраняем объект легенды для последующего обновления
             legend_obj = ax.legend(
                 wedges,
-                statistic_data.keys(),
+                legend_title,
                 loc="center left",
                 bbox_to_anchor=(0.8, 0.5)
             )
@@ -125,7 +164,7 @@ def show_statistic():
             # Перерисовываем диаграмму с новыми данными
             wedges, texts, autotexts = ax.pie(
                 statistic_data.values(),
-                pctdistance=1.2,
+                pctdistance=1.1,
                 autopct='%1.1f%%',
                 startangle=90,
                 radius=0.5,
@@ -139,7 +178,7 @@ def show_statistic():
                 legend_obj.remove()  # Удаляем старую легенду
                 legend_obj = ax.legend(
                 wedges,
-                statistic_data.keys(),
+                legend_title,
                 loc="center left",
                 bbox_to_anchor=(0.8, 0.5)
             )
@@ -168,7 +207,6 @@ class Check_win:
         global current_date
         current_date = datetime.date.today()
         self.root.after(self.update_interval, self.track_time)
-        print(current_date)
     def track_active_window(self, info_label):
         global sum_sec
         if sum_sec >= limit:
@@ -188,6 +226,7 @@ class Check_win:
             else:
                 apps[str(current_date)][title] = 0
             sec_left = limit - sum_sec
+
             info_hrs = sec_left // 3600
             info_min = (sec_left - info_hrs * 3600) // 60
             save_data()
@@ -200,6 +239,7 @@ class Check_win:
         self.root.after(self.update_interval, self.track_active_window, info_label)
 
 def Show_limit(limit_time):
+    #print(limit_time)
     global limit_minuts, limit_hours
     limit_hours = int(limit_time) // 60
     limit_minuts = int(limit_time) % 60
@@ -211,7 +251,7 @@ def on_acceptbutton_pressed():
     accept_button.destroy()
     limit_time.destroy()
     info = limit - sum_sec
-    info_label = tk.Label(text=str(info), font=("Small Fonts", 26))
+    info_label = tk.Label(text=str(info), font=("Small Fonts", 26), background = background_color, fg = color_text)
     info_label.grid(row = 0, column = 0, columnspan = 3, pady = 10)
     app = Check_win(root, info_label)
 
@@ -222,21 +262,22 @@ limit_minuts = 30
 if __name__ == "__main__":
     root = tk.Tk()
     root.geometry('500x500')
-
-    limit_time = tk.Scale(root, from_ = 30, to = 360, width = 20, troughcolor='#696969'
-                          ,showvalue = False,highlightthickness=0,sliderrelief='flat',
-                          bg='#D2B48C',activebackground='#C0C0C0',  sliderlength = 50, orient=tk.HORIZONTAL,
-                          resolution=5, borderwidth=0, command = Show_limit)
-    text_scale = tk.Label(text=str(limit_hours) + ':' + str(limit_minuts),  font=("Small Fonts", 26, 'bold'))
-    data_label = tk.Label(text = str(selected_date), font = ("Small Fonts", 24))
-    accept_button = tk.Button(root, text = 'Подтвердить', command = on_acceptbutton_pressed, font = ("Avignon Pro", 13))
-    show_statistic_button = tk.Button(root, text = 'Показать статистику', command = show_statistic, font = ("Small Fonts", 13))
-    forward_button = tk.Button(root, text = '>', command = date_forward, font = ("Small Fonts", 13, 'bold'))
-    back_button = tk.Button(root, text = '<', command = date_back, font = ("Small Fonts", 13, 'bold'))
-    today_button = tk.Button(root, text = 'сегодня', command = date_today, font = ("Small Fonts", 12))
+    root.configure(background = background_color)
+    limit_time = tk.Scale(root, from_=30, to=360, width=20, troughcolor='#696969'
+                                        , showvalue=False, highlightthickness=0, sliderrelief='flat',
+                                        bg = '#C0C0C0', activebackground='#D4FE81', sliderlength=50,
+                                        orient=tk.HORIZONTAL,
+                                        resolution=5, borderwidth=0, command=Show_limit)
+    text_scale = tk.Label(text=str(limit_hours) + ':' + str(limit_minuts),  font=("Small Fonts", 26, 'bold'), fg = color_text, background = background_color)
+    data_label = tk.Label(text = str(selected_date), font = ("Small Fonts", 24), fg = color_text, background = background_color)
+    accept_button = customtkinter.CTkButton(root, text = 'Подтвердить', corner_radius=15, command = on_acceptbutton_pressed, font = ("Avignon Pro", 13), border_width = 2, fg_color = button_bg_col, border_color = '#19080f',text_color = button_text_col, width = 100, height= 35, hover_color = '#D4FE81')
+    show_statistic_button = customtkinter.CTkButton(root, text = 'Показать статистику', corner_radius=15, command = show_statistic, font = ("Avignon Pro", 13), border_width = 2, fg_color = button_bg_col, border_color = '#19080f',text_color = button_text_col, width = 110, height= 40, hover_color = '#D4FE81')
+    forward_button = customtkinter.CTkButton(root, text = '>', corner_radius=30, command = date_forward, font = ("Avignon Pro", 13), border_width = 2, fg_color = button_bg_col,width=40, height = 40, border_color = '#19080f',text_color = button_text_col, hover_color = '#D4FE81')
+    back_button = customtkinter.CTkButton(root, text = '<', corner_radius=30, command = date_back, font = ("Avignon Pro", 13), border_width = 2, fg_color = button_bg_col,width=40, height = 40, border_color = '#19080f',text_color = button_text_col, hover_color = '#D4FE81')
+    today_button = customtkinter.CTkButton(root, text = 'Сегодня', corner_radius=15, command = date_today, font = ("Avignon Pro", 13), border_width = 2, fg_color = button_bg_col, border_color = '#19080f',text_color = button_text_col, width = 100, height= 35, hover_color = '#D4FE81')
 
     root.columnconfigure(0, weight=1)
-    root.columnconfigure(1, weight=0)  # Центральная колонка без растяжения
+    root.columnconfigure(1, weight=0)
     root.columnconfigure(2, weight=1)
 
     text_scale.grid(row=0, column=0, columnspan=3, pady=3)
@@ -247,5 +288,6 @@ if __name__ == "__main__":
     back_button.grid(row=5, column=0, padx=5, pady=10, sticky="e")
     show_statistic_button.grid(row=5, column=1, padx=5, pady=10)
     forward_button.grid(row=5, column=2, padx=5, pady=10, sticky="w")
+    root.protocol("WM_DELETE_WINDOW", close_window)
     root.mainloop()
 
